@@ -1,11 +1,11 @@
 #ifndef CHIP8_H 
 #define CHIP8_H
-#define CHIP8_RAM 4000 
+#define CHIP8_RAM 4096 
 #define FONT_ADDRESS 80
 #define PROGRAM_ADDRESS 512
 #define DISPLAY_WIDTH 64
 #define DISPLAY_HEIGHT 32
-#define INSTRUCTIONS_PER_SECOND 1000
+#define INSTRUCTIONS_PER_SECOND 700 
 
 struct cpu_state; 
 
@@ -13,8 +13,8 @@ class CHIP8 {
 private: 
 	bool power; 
 	bool display[DISPLAY_HEIGHT][DISPLAY_WIDTH]; 
-	uint64_t last_cpu_time;
 	cpu_state* chip8_state;
+	const bool* keyboard_state; 
 public: 
 	CHIP8(char* codebuffer, int length); 
 	uint16_t fetch_instruction(); 
@@ -23,6 +23,8 @@ public:
 	void execute_instruction(uint16_t inst);
 	void CPU_step(); 
 	void error();
+	void decrement_timers(); 
+	void update_keystate(); 
 	~CHIP8();
 }; 
 

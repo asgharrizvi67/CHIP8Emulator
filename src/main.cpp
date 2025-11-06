@@ -6,9 +6,6 @@
 #include <SDL3/SDL_main.h>
 #include "chip8.h"
 
-// Display is 64 x 32. A 10x Scaling factor, would make it 640 by 320 pixels. 
-
-
 struct app_context {
 	SDL_Window* window; 
 	SDL_Renderer* renderer;
@@ -92,6 +89,8 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 	SDL_RenderClear(app->renderer);
 	if(app->chip8 != nullptr) {	
 		if(app->chip8->is_on()) {
+			app->chip8->update_keystate(); 
+			app->chip8->decrement_timers(); // Do this seprately; Needs to be 60Hz
 			app->chip8->CPU_step();	
 			// we need to draw the display now. 1 is for white pixel; 0 is for black
 			for(int i = 0; i < DISPLAY_HEIGHT; i++) {
