@@ -2,6 +2,7 @@ add_executable (
 	CHIP8Emulator
 	main.cpp
 	chip8.cpp
+	keyboard.cpp
 )
 
 target_include_directories(CHIP8Emulator

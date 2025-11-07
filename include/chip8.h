@@ -5,7 +5,8 @@
 #define PROGRAM_ADDRESS 512
 #define DISPLAY_WIDTH 64
 #define DISPLAY_HEIGHT 32
-#define INSTRUCTIONS_PER_SECOND 700 
+#define INSTRUCTIONS_PER_SECOND 1000 
+#include "keyboard.h"
 
 struct cpu_state; 
 
@@ -14,7 +15,7 @@ private:
 	bool power; 
 	bool display[DISPLAY_HEIGHT][DISPLAY_WIDTH]; 
 	cpu_state* chip8_state;
-	const bool* keyboard_state; 
+	Keyboard* keyboard; 
 public: 
 	CHIP8(char* codebuffer, int length); 
 	uint16_t fetch_instruction(); 
@@ -24,7 +25,7 @@ public:
 	void CPU_step(); 
 	void error();
 	void decrement_timers(); 
-	void update_keystate(); 
+	void update_keys(); 
 	~CHIP8();
 }; 
 

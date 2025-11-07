@@ -29,12 +29,13 @@ struct cpu_state {
 }; 
 
 CHIP8::CHIP8(char* codebuffer, int length) {
-	// Turn on the cpu and set last step time to current time.
 	power = true; 
-	
 	// Preffered initalizer list initalization.
 	chip8_state = new cpu_state{}; 
 	
+	// Initalize keyboard with default configuartion.
+	keyboard = new Keyboard{};  	
+
 	// Font data; Set in the first 512 bytes (0 -> 1FF). 
 	// Should be in 050 - 09F. 
 	uint8_t font_data[] = {
@@ -61,14 +62,10 @@ CHIP8::CHIP8(char* codebuffer, int length) {
 	// Copy the program code to address 200 in memory 
 	std::memcpy(&(chip8_state->memory[PROGRAM_ADDRESS]), codebuffer, length);
 	chip8_state->pc = PROGRAM_ADDRESS; // Set program counter to program location. 		
-	// seed random number generator
 	srand(time(NULL)); 
 }
 
 uint16_t CHIP8::fetch_instruction() {
-	// an instruction is 16 bits; 
-	// the program counter points to the
-	// first 8 bits, 
 	uint16_t curr_pc = chip8_state->pc; 
 
 	if(curr_pc >= CHIP8_RAM) {
@@ -80,8 +77,7 @@ uint16_t CHIP8::fetch_instruction() {
 	uint8_t high = chip8_state->memory[curr_pc]; // First part of instruction (CHIP8 is big endian)
 	uint8_t low = chip8_state->memory[curr_pc + 1]; // Second part of instruction
 	chip8_state->pc += 2; // Move to next instruction
-	// Now we need to combine the 2 parts of the instruction; 
-	// Shift the high part 8 bits to the right 
+	
 	return (static_cast<uint16_t>(high) << 8) | (static_cast<uint16_t>(low)); 
 }
 
@@ -98,20 +94,16 @@ bool CHIP8::display_bit(int i, int j) {
 }
 
 void CHIP8::execute_instruction(uint16_t inst) {
-	// printf("Executing Instruction: %04x\n", inst); 
-		
 	auto unimplemented_instruction = [&](uint16_t inst) {
 		printf("Instruction %04x not implemented!\n", inst);
-		//error(); 
 	}; 
 	
 	switch((inst >> 12)) {
 		case 0x0: {
 			if(inst == 0x00E0) {
-				// printf("Clearing screen...\n"); 	
 				for(int i = 0; i < DISPLAY_HEIGHT; i++) {
 					for(int j = 0; j < DISPLAY_WIDTH; j++) {
-						display[i][j] = false; // Set each bit to OFF.		
+						display[i][j] = false; 		
 					}
 				}
 			} else if(inst == 0x00EE) {
@@ -126,21 +118,16 @@ void CHIP8::execute_instruction(uint16_t inst) {
 				}
 			}
 		} break; 
-		// Instruction 1NNN
 		case 0x1: {
 			uint16_t NNN = (inst & 0x0FFF); 
 			chip8_state->pc = NNN; 	
-			// printf("Jump to adress: %x\n", jump); 
 		} break;
-		// Instruction 2NNN
 		case 0x2: {
-			// Execute function at NNN; 
-			// Essentially, Save current PC in stack, then Jump to NNN
+			// Save current PC in stack, then Jump to NNN
 			uint16_t NNN = (inst & 0x0FFF); 	
 			chip8_state->st.push(chip8_state->pc);
 			chip8_state->pc = NNN;
 		} break;
-		// Instruction 3XNN
 		case 0x3: {
 			uint8_t x = (inst & 0x0F00) >> 8; 
 			uint8_t NN = static_cast<uint8_t>(inst);
@@ -150,7 +137,6 @@ void CHIP8::execute_instruction(uint16_t inst) {
 				chip8_state->pc += 2; 
 			}
 		} break; 
-		// Instruction 4XNN
 		case 0x4: {
 			uint8_t x = (inst & 0x0F00) >> 8; 
 			uint8_t NN = static_cast<uint8_t>(inst);
@@ -160,7 +146,6 @@ void CHIP8::execute_instruction(uint16_t inst) {
 				chip8_state->pc += 2; 
 			}
 		} break;
-		// Instruction 5XY0
 		case 0x5: {
 			uint8_t x = (inst & 0x0F00) >> 8; 
 			uint8_t y = (inst & 0x00F0) >> 4;
@@ -170,77 +155,69 @@ void CHIP8::execute_instruction(uint16_t inst) {
 				chip8_state->pc += 2; 
 			}
 		} break; 
-		// Instruction 6XNN
 		case 0x6: {
-			// Second nibble is the register. 
 			uint8_t x = (inst & 0x0F00) >> 8;
-			// Last byte is the value we need to set. 
 			uint8_t NN = static_cast<uint8_t>(inst); 
-			// Set corresponding register. 
+			
 			chip8_state->v[x] = NN; 		
-			// printf("Setting Register %x, with %x\n", x, NN); 
 		} break; 
-		// Instruction 7XNN
 		case 0x7: {
-			// Second nibble is the register. 
 			uint8_t x = (inst & 0x0F00) >> 8;
-			// Last byte is the value we need to set. 
 			uint8_t NN = static_cast<uint8_t>(inst); 
-			// add to corresponding register. 
+			
 			chip8_state->v[x] += NN; 		
-			// printf("Setting Register %x, with %x\n", x, NN); 
 		} break; 
-		// Arithemtic Instructions
 		case 0x8: {
-			// Last Nibble determines which instruction it is.			
-			// Instructions 8XYK where K >= 0
 			switch(inst & 0x000F) {
 				case 0x0: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4; 
-					// Store the value of VY in VX. 
+					
 					chip8_state->v[x] = chip8_state->v[y];
 				} break; 
 				
 				case 0x1: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4; 
-					// VX is set to VX | VY. 
+					
 					chip8_state->v[x] |= chip8_state->v[y]; 
 				} break;  
 				case 0x2: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4; 
-					// VX is set to VX & VY. 
+					
 					chip8_state->v[x] &= chip8_state->v[y];
 				} break; 
 				case 0x3: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4; 
-					// VX is set to VX ^ VY. 
+					
 					chip8_state->v[x] ^= chip8_state->v[y];
 				} break; 
 				case 0x4: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4; 
+					
 					// VX is set to VX + VY. 
 					// If VX + VY overflows (Carry), 
 					// then set the VF flag to 1.
 					// max value of uint8_t is 
 					// 255 (2^8 - 1) . if (VX + VY) > 255 or
 					// VX > 255 - VY without overflow. 
-					
-					if(chip8_state->v[x] > UINT8_MAX - chip8_state->v[y]) {
+					uint8_t VX = chip8_state->v[x]; 
+					uint8_t VY = chip8_state->v[y]; 
+
+					chip8_state->v[x] += chip8_state->v[y]; 
+					if(VX > UINT8_MAX - VY) {
 						chip8_state->v[0xF] = 1; 	
 					} else {
 						chip8_state->v[0xF] = 0; 
 					}
-
-					chip8_state->v[x] += chip8_state->v[y]; 
 				} break;
 				case 0x5: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4; 
+					
 					// VX is set to VX - VY. 
 					// If Borrow occurs, VF = 0. 
 					// If Borrow does not occur VF = 1 
@@ -250,14 +227,16 @@ void CHIP8::execute_instruction(uint16_t inst) {
 					// overflow of two's complement. 
 					// Otherwise, the sign bit is 0 and there
 					// is no underflow, due to carry. 
+					uint8_t VX = chip8_state->v[x]; 
+					uint8_t VY = chip8_state->v[y]; 
 
-					if(chip8_state->v[x] < chip8_state->v[y]) {
+					chip8_state->v[x] -= chip8_state->v[y]; 
+
+					if(VX < VY) {
 						chip8_state->v[0xF] = 0; 
 					} else {
 						chip8_state->v[0xF] = 1;	
 					}
-					
-					chip8_state->v[x] -= chip8_state->v[y]; 
 				} break; 
 				// *************** AMBIGUOUS INSTRUCTION (8XY6 and 8XYE) ***************
 				// On CHIP-48 and SUPER-CHIP, they no longer set 
@@ -266,17 +245,17 @@ void CHIP8::execute_instruction(uint16_t inst) {
 				case 0x6: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4; 
-						
-					chip8_state->v[x] = chip8_state->v[y]; 
 					
-					// Shift right
+					uint8_t VY = chip8_state->v[y]; 
+
+					chip8_state->v[x] = chip8_state->v[y]; 
 					chip8_state->v[x] >>= 1; 
-					// Set VF to LSB of VY. 
-					chip8_state->v[0xF] = (chip8_state->v[y]) & 1; 
+					chip8_state->v[0xF] = (VY) & 1; 
 				} break; 
 				case 0x7: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4; 
+					
 					// VX is set to VY - VX. 
 					// If Borrow occurs, VF = 0. 
 					// If Borrow does not occur VF = 1 
@@ -286,32 +265,33 @@ void CHIP8::execute_instruction(uint16_t inst) {
 					// overflow of two's complement. 
 					// Otherwise, the sign bit is 0 and there
 					// is no underflow, due to carry. 
-
-					if(chip8_state->v[y] < chip8_state->v[x]) {
+					uint8_t VX = chip8_state->v[x]; 
+					uint8_t VY = chip8_state->v[y]; 
+	
+					chip8_state->v[x] = chip8_state->v[y] - chip8_state->v[x];
+					
+					if(VY < VX) {
 						chip8_state->v[0xF] = 0; 
 					} else {
 						chip8_state->v[0xF] = 1;	
-					}	
-					
-					chip8_state->v[x] = chip8_state->v[y] - chip8_state->v[x];
+					}
 				} break;
 				case 0xE: {
 					uint8_t x = (inst & 0x0F00) >> 8; 
 					uint8_t y = (inst & 0x00F0) >> 4;
-					
-					// Optional step
+						
+
+					uint8_t VY = chip8_state->v[y]; 
+
 					chip8_state->v[x] = chip8_state->v[y]; 
-					// Shift left
 					chip8_state->v[x] <<= 1;
-					// Set VF to LSB of VY
-					chip8_state->v[0xF] = (chip8_state->v[y]) & 1; 
+					chip8_state->v[0xF] = (VY & 0x0080) >> 7; 
 				} break; 
 				default: {
 					unimplemented_instruction(inst); 
 				}
 			}
 		} break; 
-		// Instruction 9XY0
 		case 0x9: {
 			uint8_t x = (inst & 0x0F00) >> 8; 
 			uint8_t y = (inst & 0x00F0) >> 4;
@@ -321,48 +301,35 @@ void CHIP8::execute_instruction(uint16_t inst) {
 				chip8_state->pc += 2; 
 			}
 		} break; 
-		// Instruction ANNN
 		case 0xA: {
 			uint16_t NNN = (inst & 0x0FFF); 
 			chip8_state->I = NNN; 
-			// printf("Setting I register with %x\n", NNN); 
 		} break; 
 		// *************** AMBIGUOUS INSTRUCTION (BNNN) *************** 
 		// CHIP-48 and SUPER-CHIP changed to BXNN, where it will jump to XNN + the value in v[x]. 
 		case 0xB: {
 			uint16_t NNN = (inst & 0x0FFF); 
-			// Jump to address NNN + v[0]. 
 			chip8_state->pc = NNN + chip8_state->v[0]; 
 		} break; 
-		// Instruction CXNN  
 		case 0xC: {
 			uint8_t x = (inst & 0xF00) >> 8; 
 			uint8_t NN = (inst & 0x00FF);
-			// Generate random number and binary AND with NN and put in VX. 
-			uint8_t random = (rand() % (UINT8_MAX + 1)); // generates between 0 and max of 8 bit number 
+			uint8_t random = (rand() % (UINT8_MAX + 1)); 
+			
 			chip8_state->v[x] = random & NN; 
 		} break;  
-		// Instruction DXYN
 		case 0xD: {
-			// Second Nibble is the X register. 
 			uint8_t x = (inst & 0x0F00) >> 8; 
-			// Third Nibble is the Y register. 
 			uint8_t y = (inst & 0x00F0) >> 4; 
-			// Last Nibble is N;
 			uint8_t N = (inst & 0x000F);
 			
-			// x and y coordinates are modded
 			int x_coord = chip8_state->v[x] % DISPLAY_WIDTH; 
 			int y_coord = chip8_state->v[y] % DISPLAY_HEIGHT; 	
 			
-			// Sprite is stored starting from location I register is pointing to
 			uint16_t sprite_addr = chip8_state->I;
 			
-			// start at x_coord, and y_coord. 
-			// printf("Drawing sprite to screen...\n", N);
-			
-			// For each y, draw the row x. 
-			// 10000000 = 0x80. Shift by k + 1, to the left.  
+			bool swap = false; 
+
 			for(int i = y_coord; i < y_coord + N && i < DISPLAY_HEIGHT; i++) {
 				if(sprite_addr >= CHIP8_RAM) {
 					printf("Error! Index register out of bounds!");
@@ -371,59 +338,71 @@ void CHIP8::execute_instruction(uint16_t inst) {
 				}
 				uint8_t sprite_layer = chip8_state->memory[sprite_addr];
 				for(int j = x_coord, k = 0; k < 8 && j < DISPLAY_WIDTH; j++, k++) {
-					// if set bit is unset, set VF register to 1. 
-					// Otherwise, set VF to 0.
-					// bit is xoord with display bit.
 					bool last_bit = display[i][j]; 
 					display[i][j] ^= ((sprite_layer & (0x80 >> k)) >> (8 - (k + 1))); 
+					
+					// If set bit is unset, set VF register to 1. 
+					// Otherwise, set VF to 0.
 					if(last_bit && last_bit != display[i][j]) {
-						chip8_state->v[0xF] = 1;
-					} else {
-						chip8_state->v[0xF] = 0;
+						swap = true; 
 					}
 				}
 				sprite_addr++; 
 			}
+			
+			if(swap) {
+				chip8_state->v[0xF] = 1; 		
+			} else {
+				chip8_state->v[0xF] = 0;
+			}
 		} break; 
-		// Keyboard instructions; Do these later
 		case 0xE: {
-				
+			uint8_t x = (inst & 0x0F00) >> 8; 
+			switch(inst & 0x00FF) {
+				case 0x9E: {
+					if(keyboard->is_pressed((chip8_state->v[x]) & 0x0F)) {
+						chip8_state->pc += 2; 
+					}
+				} break; 
+				case 0xA1: {
+					if(!(keyboard->is_pressed((chip8_state->v[x]) & 0x0F))) {
+						chip8_state->pc += 2; 
+					}
+				} break; 
+			}	
 		} break; 
 		case 0xF: {
-			// Instruction determined by last byte. 
 			uint8_t x = (inst & 0x0F00) >> 8; 	
 			switch(inst & 0x00FF) {
-				// Set VX to delay timer
 				case 0x07: {
 					chip8_state->v[x] = chip8_state->delay_timer; 	
 				} break;
-				// Wait for keypress; Do this laster
 				case 0x0A: {
-							
-				} break;
-				// Set delay timer to VX
+					if(keyboard->get_pad_release() != 0x10) {
+						chip8_state->v[x] = keyboard->get_pad_release(); 
+					} else {
+						// Halt execution until key is given 
+						chip8_state->pc -= 2; 
+					}		
+				} break;	
 				case 0x15: {
 					chip8_state->delay_timer = chip8_state->v[x]; 
 				} break; 
-				// Set sound timer to VX
 				case 0x18: {
 					chip8_state->sound_timer = chip8_state->v[x]; 
 				} break; 
 				case 0x1E: {
-					// Unsure how flag is set; 
-					// In the other instructions, VF was set to 0
-					// if there was no carry; So I will implement
-					// this behaviour. 
-					if(chip8_state->I >= CHIP8_RAM - chip8_state->v[x]) {
+					uint8_t I = chip8_state->I; 
+					chip8_state->I += chip8_state->v[x]; 	
+					
+					if(I >= CHIP8_RAM - chip8_state->v[x]) {
 						chip8_state->v[0xF] = 1; 	
 					} else {
 						chip8_state->v[0xF] = 0;
 					}
-					chip8_state->I += chip8_state->v[x]; 	
 				} break; 
 				case 0x29: {
-					// Font character; Only take last nibble
-					uint8_t vx_char = chip8_state->v[x] & 0x000F; 
+					uint8_t vx_char = chip8_state->v[x] & 0x0F; 
 					// 0 -> address 80. 
 					// 1 -> address 85. 
 					// 2 -> address 90. 
@@ -432,23 +411,22 @@ void CHIP8::execute_instruction(uint16_t inst) {
 					chip8_state->I = 0x50 + (5 * vx_char); 
 				} break; 
 				case 0x33: {
-					// Stores BCD of vx in I, I + 1 and I + 2. 
 					uint8_t val = chip8_state->v[x]; 
 					uint16_t addr = chip8_state->I;
 					if(addr < CHIP8_RAM) {
-						chip8_state->memory[addr] = (val / 100); // First digit
+						chip8_state->memory[addr] = (val / 100); 
 					} else {
 						printf("Could not set BCD value! Address out of bounds!"); 
 						error(); 
 					}
 					if(addr + 1 < CHIP8_RAM) {
-						chip8_state->memory[addr + 1] = (val / 10) % 10; // Second digit 
+						chip8_state->memory[addr + 1] = (val / 10) % 10;  
 					} else {
 						printf("Could not set BCD value! Address out of bounds!"); 
 						error(); 
 					}
 					if(addr + 2 < CHIP8_RAM) {
-						chip8_state->memory[addr + 2] = val % 10; // Last digit
+						chip8_state->memory[addr + 2] = val % 10; 
 					} else {
 						printf("Could not set BCD value! Address out of bounds!"); 
 						error(); 
@@ -465,6 +443,7 @@ void CHIP8::execute_instruction(uint16_t inst) {
 						chip8_state->memory[addr] = chip8_state->v[i]; 
 						addr++; 
 					}
+					chip8_state->I += x + 1;
 					// *************** AMBIGUOUS INSTRUCTION *************** 
 					// CHIP-48 and Super CHIP changed this so that I is not incremented to 
 					// I + X + 1 after the operation. 
@@ -480,6 +459,7 @@ void CHIP8::execute_instruction(uint16_t inst) {
 						chip8_state->v[i] = chip8_state->memory[addr]; 
 						addr++; 
 					}
+					chip8_state->I += x + 1; 
 					// *************** AMBIGUOUS INSTRUCTION *************** 
 					// CHIP-48 and Super CHIP changed this so that I is not incremented to 
 					// I + X + 1 after the operation. 
@@ -530,10 +510,11 @@ void CHIP8::decrement_timers() { // Seperate method, since these need to be decr
 	}
 }
 
-void CHIP8::update_keystate() {
-	keyboard_state = SDL_GetKeyboardState(NULL); 
+void CHIP8::update_keys() {
+	keyboard->update_keys(); 
 }
 
 CHIP8::~CHIP8() {
 	delete chip8_state; 
+	delete keyboard; 
 }

@@ -71,6 +71,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event *event) {
+	auto* app = (app_context*)appstate; 
 	if(event->type == SDL_EVENT_QUIT) {
 		return SDL_APP_SUCCESS; 	
 	}
@@ -89,7 +90,6 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 	SDL_RenderClear(app->renderer);
 	if(app->chip8 != nullptr) {	
 		if(app->chip8->is_on()) {
-			app->chip8->update_keystate(); 
 			app->chip8->decrement_timers(); // Do this seprately; Needs to be 60Hz
 			app->chip8->CPU_step();	
 			// we need to draw the display now. 1 is for white pixel; 0 is for black
@@ -100,10 +100,11 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 					}
 					r.x = j * app->scale; 
 					r.y = i * app->scale; 
-					SDL_SetRenderDrawColor(app->renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+					SDL_SetRenderDrawColor(app->renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
 					SDL_RenderFillRect(app->renderer, &r);
 				}
 			}
+			app->chip8->update_keys(); 
 		}
 	}	
 	SDL_RenderPresent(app->renderer); 
