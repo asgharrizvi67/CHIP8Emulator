@@ -2,6 +2,7 @@
 #define FPS 60
 #include <fstream>
 #include <stdio.h>
+#include <vector>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
 #include "chip8.h"
@@ -9,9 +10,29 @@
 struct app_context {
 	SDL_Window* window; 
 	SDL_Renderer* renderer;
+	SDL_AudioStream* stream; 
 	CHIP8* chip8; 
 	uint32_t scale; 
 }; 
+
+static void SDLCALL feed_audio_stream(void* userdata, SDL_AudioStream* astream, int additional_amount, int total_amount) {
+	// Stuff here	
+	static int curr_sine_sample = 0; 
+	int num_of_samples = additional_amount / sizeof(float); 
+
+	std::vector<float> samples(num_of_samples); 
+
+	for(int i = 0; i < samples.size(); i++) {
+		int freq = 440; // 440 Hz
+		float x = curr_sine_sample / 8000.0f; // x value of wave. 
+		samples[i] = SDL_sinf(2 * SDL_PI_F * freq * x);
+		curr_sine_sample++; 
+	} 
+	
+	curr_sine_sample %= 8000; 
+	
+	SDL_PutAudioStreamData(astream, samples.data(), samples.size() * sizeof(float)); 
+}	 
 
 void load_program(const std::string& file_name, app_context* ctx) {
 	using namespace std; 
@@ -20,8 +41,13 @@ void load_program(const std::string& file_name, app_context* ctx) {
 	if(is) {
 		is.seekg(0, is.end);
 		int length = is.tellg(); 
-		is.seekg(0, is.beg); 
-		char* codebuffer = new char[length]; 
+		is.seekg(0, is.beg);
+		if(length < 0) {
+			is.close(); 
+			printf("Error in getting file length!\n");
+			return; 
+		}
+		char* codebuffer = new char[length];
 		
 		is.read(codebuffer, length); 
 		ctx->chip8 = new CHIP8(codebuffer, length); 
@@ -29,7 +55,7 @@ void load_program(const std::string& file_name, app_context* ctx) {
 		
 		delete[] codebuffer; 
 	} else {
-		printf("Could not load program file!");
+		printf("Could not load program file!\n");
 	}
 }
 
@@ -39,11 +65,11 @@ SDL_AppResult app_fail() {
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
-	if(!SDL_Init(SDL_INIT_VIDEO)) {
+	if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
 		return app_fail(); 
 	}	
 	
-	uint32_t init_scale = 20;
+	uint32_t init_scale = 10;
 
 	SDL_Window* window = SDL_CreateWindow("CHIP-8 Emulator", DISPLAY_WIDTH * init_scale, DISPLAY_HEIGHT * init_scale, 0); 
 	if(!window) {
@@ -54,19 +80,26 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
 	if(!renderer) {
 		return app_fail(); 
 	}
+	
+	
+	SDL_AudioSpec spec; 
+	
+	spec.format = SDL_AUDIO_F32; // Float for sine wave
+	spec.channels = 1; // Mono audio; Literally only 1 sound is played. 
+	spec.freq = 8000; // 8000Hz audio sampling rate; very low quality sound.	
 
 	*appstate = new app_context {
 		.window = window, 
 		.renderer = renderer, 
+		.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, feed_audio_stream, NULL),
 		.scale = init_scale,
 	}; 
 
 	if(argc < 2) {
-		SDL_Log("No program specified for load"); 
+		SDL_Log("No program specified for load\n"); 
 	} else {
 		load_program(argv[1], (app_context*)(*appstate)); 		
 	}
-
 	return SDL_APP_CONTINUE; 
 }
 
@@ -104,6 +137,15 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 					SDL_RenderFillRect(app->renderer, &r);
 				}
 			}
+
+			if(app->chip8->sound()) {
+				// Start if audiostream not playing 
+				SDL_ResumeAudioStreamDevice(app->stream); 
+			} else {
+				// Stop if audiostream is running
+				SDL_PauseAudioStreamDevice(app->stream); 
+			}
+
 			app->chip8->update_keys(); 
 		}
 	}	
@@ -128,6 +170,10 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 	
 	if(app->window != nullptr) {
 		SDL_DestroyWindow(app->window); 	
+	}
+	
+	if(app->stream != nullptr) {
+		SDL_DestroyAudioStream(app->stream); 
 	}
 
 	if(app->chip8 != nullptr) {

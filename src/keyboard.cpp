@@ -39,8 +39,10 @@ Keyboard::Keyboard() {
 	padtokey[0xF] = SDL_SCANCODE_V; 
 }
 
-void Keyboard::update_keys() {
-	std::memcpy(old_keys, curr_keys, sizeof(old_keys)); 	
+void Keyboard::update_keys() {	
+	for(int i = 0; i < 16; i++) {
+		old_keys[padtokey[i]] = curr_keys[padtokey[i]]; 
+	}
 }
 
 bool Keyboard::is_pressed(uint8_t pad_val) {

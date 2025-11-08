@@ -7,17 +7,6 @@
 #include <SDL3/SDL.h>
 #include "chip8.h"
 
-// Memory -> 4KB of RAM. ()
-// Display -> 64 x 32 pixels. Not a part of CPU; But maybe here anyways
-// Program Counter -> points to current instruction in memory (12 bits)
-// Index Register 'I' that points to locations in memory
-// Stack for 16 bit adresses; Used to call functions and return from them 
-// 8 bit delay timer; Decremented at 60Hz until it reaches 0
-// 8 bit sound timer; beeping sound as long as value is > 0; Decrements at 60Hz as well.
-// 16 1 byte variable registers; labelled 0 -> F or 0 to 15 in decimal; called V0 - VF
-// VF -> flag register; used depending on instruction. 
-// How to structure ? Have a struct for the state, and then various methods on that struct ?
-
 struct cpu_state {
 	uint8_t delay_timer; 
 	uint8_t sound_timer; 
@@ -31,11 +20,9 @@ struct cpu_state {
 CHIP8::CHIP8(char* codebuffer, int length) {
 	power = true; 
 	// Preffered initalizer list initalization.
-	chip8_state = new cpu_state{}; 
-	
+	chip8_state = new cpu_state{}; 	
 	// Initalize keyboard with default configuartion.
-	keyboard = new Keyboard{};  	
-
+	keyboard = new Keyboard{};  
 	// Font data; Set in the first 512 bytes (0 -> 1FF). 
 	// Should be in 050 - 09F. 
 	uint8_t font_data[] = {
@@ -87,6 +74,10 @@ void CHIP8::error() {
 
 bool CHIP8::is_on() {
 	return power; 
+}
+
+bool CHIP8::sound() {
+	return chip8_state->sound_timer > 0;
 }
 
 bool CHIP8::display_bit(int i, int j) {
@@ -392,6 +383,9 @@ void CHIP8::execute_instruction(uint16_t inst) {
 					chip8_state->sound_timer = chip8_state->v[x]; 
 				} break; 
 				case 0x1E: {
+					// This instruction has a weird quirk on the Amiga, 
+					// that causes the carry flag to be set. 
+					// Will make this configurable later. 
 					uint8_t I = chip8_state->I; 
 					chip8_state->I += chip8_state->v[x]; 	
 					
@@ -476,23 +470,7 @@ void CHIP8::execute_instruction(uint16_t inst) {
 }
 
 void CHIP8::CPU_step() {
-	static uint64_t last_cpu_time = SDL_GetTicksNS(); 
-	static uint64_t remainder = 0; 
-	
-	uint64_t curr_time = SDL_GetTicksNS(); 
-	uint64_t time_step = curr_time - last_cpu_time;
-	last_cpu_time = curr_time; 
-	
-	uint64_t s_to_ns = 1000000000;
-	uint64_t cycles_per_frame = ((time_step * INSTRUCTIONS_PER_SECOND) / s_to_ns);
-	remainder += (time_step * INSTRUCTIONS_PER_SECOND) - (cycles_per_frame * s_to_ns); 
-	
-	if(remainder >= s_to_ns) {
-		remainder -= s_to_ns;
-		cycles_per_frame++; 
-	}
-	
-	for(uint64_t i = 0; i < cycles_per_frame; i++) {
+	for(uint64_t i = 0; i < CYCLES_PER_FRAME; i++) {
 		if(!power) {
 			continue;
 		}
@@ -514,7 +492,4 @@ void CHIP8::update_keys() {
 	keyboard->update_keys(); 
 }
 
-CHIP8::~CHIP8() {
-	delete chip8_state; 
-	delete keyboard; 
-}
+CHIP8::~CHIP8() {}

@@ -3,9 +3,9 @@
 #define CHIP8_RAM 4096 
 #define FONT_ADDRESS 80
 #define PROGRAM_ADDRESS 512
-#define DISPLAY_WIDTH 64
-#define DISPLAY_HEIGHT 32
-#define INSTRUCTIONS_PER_SECOND 1000 
+#define DISPLAY_WIDTH 64 
+#define DISPLAY_HEIGHT 32 
+#define CYCLES_PER_FRAME 100 
 #include "keyboard.h"
 
 struct cpu_state; 
@@ -20,6 +20,7 @@ public:
 	CHIP8(char* codebuffer, int length); 
 	uint16_t fetch_instruction(); 
 	bool is_on();
+	bool sound(); 
 	bool display_bit(int i, int j);
 	void execute_instruction(uint16_t inst);
 	void CPU_step(); 
